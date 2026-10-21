@@ -100,8 +100,9 @@ const KINDS = {
     max: 70,
     convert: (v) => round(v, 1),
   },
-  // A probe in the ground: kept out of the room temperature average of Gladys.
-  soilTemperature: {
+  // A probe (in the ground, in water...): kept out of the room temperature
+  // average of Gladys.
+  probe: {
     category: CAT.TEMPERATURE_SENSOR,
     type: TYPES.TEMPERATURE_SENSOR.PROBE,
     unit: UNITS.CELSIUS,
@@ -264,10 +265,12 @@ const OUTDOOR = [
   ['solar_radiation', 'solar', 'Solar radiation', (r) => first(r, 'solar_rad')],
   ['uv_index', 'uv', 'UV index', (r) => first(r, 'uv_index', 'uv')],
   ['battery_low', 'batteryLow', 'Battery low (transmitter)', flagOf('trans_battery_flag')],
-  // The extra sensors a Vantage Pro2 logger reports in the same record.
+  // The extra sensors a Vantage Pro2 logger reports in the same record. An
+  // extra temperature is often a probe (pool, greenhouse, water tank): a
+  // `probe`, kept out of the room temperature average of Gladys.
   ...[1, 2, 3, 4, 5, 6, 7].map((n) => [
     `extra_temperature_${n}`,
-    'temperature',
+    'probe',
     `Extra temperature ${n}`,
     tempOf(`temp_extra_${n}`),
   ]),
@@ -279,7 +282,7 @@ const OUTDOOR = [
   ]),
   ...[1, 2, 3, 4].map((n) => [
     `soil_temperature_${n}`,
-    'soilTemperature',
+    'probe',
     `Soil temperature ${n}`,
     tempOf(`temp_soil_${n}`),
   ]),
@@ -296,7 +299,7 @@ const AIRLINK = [
 const SOIL = [
   ...[1, 2, 3, 4].map((n) => [
     `soil_temperature_${n}`,
-    'soilTemperature',
+    'probe',
     `Soil temperature ${n}`,
     tempOf(`temp_${n}`),
   ]),
@@ -329,10 +332,28 @@ export const KIND_LABELS = {
   console: 'console',
 };
 
+/**
+ * The fields only an outdoor transmitter (ISS, Vantage Pro2 / Vue logger)
+ * record holds. A Vantage Pro2 record of data structure 2 always carries
+ * the soil and leaf keys too (null without such sensors): it stays outdoor.
+ */
+const ISS_MARKERS = [
+  'temp_out',
+  'hum_out',
+  'temp',
+  'wind_speed',
+  'wind_speed_last',
+  'rain_size',
+  'bar',
+];
+
 /** The kind of a record, from the fields it holds (never from a type number alone). */
 export function kindOf(record) {
   if (Object.hasOwn(record, 'pm_2p5') || Object.hasOwn(record, 'pm_10')) {
     return 'airlink';
+  }
+  if (ISS_MARKERS.some((key) => Object.hasOwn(record, key))) {
+    return 'outdoor';
   }
   if (
     Object.hasOwn(record, 'moist_soil_1') ||
@@ -375,6 +396,11 @@ export function groupsOf(records, { local = false, now, staleBefore = -Infinity 
   for (const [index, { lsid, ts, data }] of records.entries()) {
     const at = ts === null || ts === undefined ? now : Math.min(ts, now);
     if (!(at >= staleBefore)) {
+      continue;
+    }
+    // Local: a transmitter the WeatherLink Live is searching for (rx_state 2,
+    // lost) may still carry its last values: never published as current.
+    if (local && own(data, 'rx_state') === 2) {
       continue;
     }
     const ctx = { local };

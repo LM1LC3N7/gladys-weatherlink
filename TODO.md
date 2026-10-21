@@ -138,6 +138,28 @@
   minutes), at most 250 per minute (the core accepts 300), the budget
   reserved before each await.
 
+- **Review 1 fixes**:
+  - B1: a record is `outdoor` as soon as it holds an ISS marker
+    (`temp_out`, `hum_out`, `temp`, `wind_speed`, `wind_speed_last`,
+    `rain_size`, `bar`): a Vantage Pro2 record of structure 2 always
+    carries null soil and leaf keys, and was taken for a soil station.
+  - I1: a source removed from the configuration keeps its pace (last
+    request, pause, refusal, fingerprint) while any of it runs (the last
+    request + 60 min, the longest interval), only its stations are dropped;
+    the file keeps 8 sources at most (the oldest removed ones go first).
+  - I2: extra temperatures are `probe` (out of the room average), like the
+    soil ones; the main ISS temperature stays `decimal` (the docs ask to put
+    the device in an "Outside" room); extra humidities stay averaged by the
+    core (no type filter for humidity), said in the docs.
+  - M1: a 403 on a station re-reads the list once, 30 minutes later, then
+    waits for the 6-hour refresh (no write when nothing changes).
+  - M2: a local device answering 5xx is paused 30 minutes at most.
+  - M3: local records with `rx_state` 2 (transmitter searched for, lost)
+    are skipped; in the cloud, `last_packet_received_timestamp` dates the
+    record when given. To confirm on a real station.
+  - M5: a key or a secret with a character outside printable ASCII is
+    "not valid" at once and never sent.
+
 ## Ideas
 
 - The UDP real-time broadcast of the WeatherLink Live (wind every 2.5 s).

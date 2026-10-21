@@ -93,6 +93,96 @@ test('local: rain buckets by collector size, soil station, console', () => {
   assert.equal(asCloud.rain_today, undefined);
 });
 
+// A Vantage Pro2 / Vue record of data structure 2 (WeatherLink IP, Vantage
+// Connect), with the soil and leaf keys it always carries (null without such
+// sensors), as astrandb/weatherlink reads it (review 1, B1).
+const DS2 = {
+  ts: 1760983200,
+  temp_out: 59,
+  hum_out: 70,
+  temp_in: 70,
+  hum_in: 40,
+  bar: 30.0,
+  wind_speed: 10,
+  wind_speed_10_min_avg: 8,
+  wind_gust_10_min: 20,
+  wind_dir: 180,
+  rain_rate_in: 0.1,
+  rain_day_in: 0.5,
+  solar_rad: 500,
+  uv: 4,
+  temp_extra_1: 82,
+  temp_extra_2: null,
+  temp_soil_1: 50,
+  temp_leaf_1: null,
+  moist_soil_1: null,
+  moist_soil_2: null,
+  wet_leaf_1: null,
+  hum_extra_1: null,
+};
+
+test('B1 a Vantage Pro2 record (structures 2 and 6) is outdoor, never soil', () => {
+  assert.equal(kindOf(DS2), 'outdoor');
+  const groups = groupsOf([{ lsid: 100, ts: NOW, data: DS2 }], { now: NOW });
+  assert.deepEqual([...groups.keys()].sort(), ['c', 's100']);
+  assert.deepEqual(groups.get('s100').values, {
+    temperature: 15,
+    humidity: 70,
+    wind_speed: 16.1,
+    wind_speed_avg_10min: 12.9,
+    wind_gust_10min: 32.2,
+    wind_direction: 180,
+    rain_rate: 2.5,
+    rain_today: 12.7,
+    solar_radiation: 63291,
+    uv_index: 4,
+    extra_temperature_1: 27.8,
+    soil_temperature_1: 10,
+  });
+  assert.deepEqual(groups.get('c').values, {
+    indoor_temperature: 21.1,
+    indoor_humidity: 40,
+    pressure: 1015.9,
+  });
+  // Structure 6 (EnviroMonitor): temp_out, no indoor values.
+  const ds6 = { ts: 1760983200, temp_out: 41, hum_out: 90, bar: 29.9, wind_speed: 5, uv: 1 };
+  const six = groupsOf([{ lsid: 7, ts: NOW, data: ds6 }], { now: NOW });
+  assert.equal(six.get('s7').kind, 'outdoor');
+  assert.equal(six.get('s7').values.temperature, 5);
+  // A soil / leaf station (structures 12 and 25, local type 2) stays soil.
+  assert.equal(kindOf({ temp_1: 50, moist_soil_1: 12, wet_leaf_1: null, txid: 3 }), 'soil');
+});
+
+test('I2 extra and soil temperatures are probes (out of the room average); the main one is decimal', () => {
+  const gladys = createFakeGladys({ selector: 'weatherlink' });
+  const device = deviceOf(gladys, {
+    type: 'station',
+    stationKey: 'c1',
+    groupKey: 's100',
+    kind: 'outdoor',
+    name: 'X',
+    fields: new Set(['temperature', 'extra_temperature_1', 'soil_temperature_1']),
+  });
+  const types = Object.fromEntries(
+    device.features.map((f) => [f.external_id.split(':').pop(), f.type]),
+  );
+  assert.deepEqual(types, {
+    temperature: 'decimal',
+    extra_temperature_1: 'probe',
+    soil_temperature_1: 'probe',
+  });
+});
+
+test('M3 a lost transmitter (local rx_state 2) publishes nothing', () => {
+  const records = localRecords(live());
+  records[0].data = { ...records[0].data, rx_state: 2 };
+  const groups = groupsOf(records, { local: true, now: NOW });
+  assert.equal(groups.has('s48308'), false);
+  assert.ok(groups.has('c'));
+  records[0].data = { ...records[0].data, rx_state: 0 };
+  assert.ok(groupsOf(records, { local: true, now: NOW }).has('s48308'));
+});
+
 test('an AirLink record', () => {
   const data = { temp: 68, hum: 55, pm_1: 3, pm_2p5: 8.25, pm_10: 12.5, aqi_val: 34.2 };
   assert.equal(kindOf(data), 'airlink');

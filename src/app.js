@@ -15,6 +15,7 @@ import {
   CLOUD_HOURLY_BUDGET,
   DEVICE_TYPES,
   HEARTBEAT,
+  LOCAL_BUSY_MAX,
   MAX_STATIONS,
   REFUSED_BACKOFF,
   STALE,
@@ -379,6 +380,7 @@ export class WeatherLinkApp {
             return;
           }
           this.applyReadings(source, station, records, { local: false });
+          station.deniedRetried = false;
           ok += 1;
         } catch (err) {
           const error = asSourceError(err);
@@ -392,10 +394,15 @@ export class WeatherLinkApp {
           if (error.kind === 'busy') {
             busy = error;
           }
-          if (error.kind === 'denied') {
-            // Removed from the account, or the account changed: the station
-            // list is read again at the next cycle (never sooner).
-            this.store.update(source.key, { stationsReadAt: 0 });
+          if (error.kind === 'denied' && !station.deniedRetried) {
+            // Removed from the account, or shared without API access: the
+            // station list is read again once, in 30 minutes at the earliest;
+            // a station still refused then waits for the 6-hour refresh.
+            station.deniedRetried = true;
+            const retryAt = this.now() - STATIONS_REFRESH + STATIONS_RETRY;
+            if (this.store.get(source.key).stationsReadAt > retryAt) {
+              this.store.update(source.key, { stationsReadAt: retryAt });
+            }
           }
           this.logger.warn(`WeatherLink station ${station.cloudId}: ${this.scrub(error)}`);
         }
@@ -474,13 +481,17 @@ export class WeatherLinkApp {
     this.logger.warn(`${name}: ${this.scrub(error)}`);
   }
 
-  /** A 429 / 5xx: Retry-After, else 5 minutes doubling; 1 minute to 6 hours. */
+  /**
+   * A 429 / 5xx: Retry-After, else 5 minutes doubling; 1 minute to 6 hours
+   * for the cloud, to 30 minutes for a device of the local network (a
+   * WeatherLink Live restarting or updating).
+   */
   recordBusy(source, error, at) {
     const streak = this.store.get(source.key).streak + 1;
     const pause = clamp(
       error.retryAfterMs ?? BUSY_BASE * 2 ** Math.min(streak - 1, 10),
       BUSY_MIN,
-      BUSY_MAX,
+      source.kind === 'local' ? LOCAL_BUSY_MAX : BUSY_MAX,
     );
     this.store.update(source.key, { streak, pausedUntil: at + pause });
   }
@@ -751,6 +762,9 @@ export class WeatherLinkApp {
   configMessage() {
     const { config } = this;
     if (config.source === 'cloud' && this.sources.length === 0) {
+      if (config.keysInvalid) {
+        return T.keysInvalid;
+      }
       return config.apiKey || config.apiSecret ? T.oneKeyMissing : T.notConfiguredCloud;
     }
     if (config.source === 'local' && this.sources.length === 0) {

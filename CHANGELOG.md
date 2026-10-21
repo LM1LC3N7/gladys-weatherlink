@@ -34,6 +34,12 @@ the notes of the version's GitHub Release.
 - Local values are published under the serial number of the device that
   measured them: two devices that swap their addresses never mix their
   values. One cloud station that fails alone never stops the others.
+- Clearing the key, switching to local and back or saving the
+  configuration never lifts a pause nor a refusal. A key or a secret with a
+  line break or a non-ASCII character is reported as not valid, never sent.
+- The extra temperatures of a Vantage Pro2 and the soil temperatures are
+  probes, kept out of the room temperature average; a lost transmitter
+  publishes no value.
 - A connection status that names the stations without value and why, and a
   "Test WeatherLink" button that reads what is due and shows the last values
   and the time of the next possible read.

@@ -23,6 +23,13 @@ One Gladys device per sensor group, so each one can go to its own room:
 
 - Only what your station sends is created. A second transmitter gets
   "(transmitter n)" in its name.
+- **Put the "outdoor sensors" and "AirLink" devices in a room of their own
+  (for example "Outside")**: Gladys averages the temperature (and the
+  humidity) of the sensors of a room, so the outdoor temperature placed in
+  the living room would skew its temperature. The extra temperatures of a
+  Vantage Pro2 (a probe in a pool, a greenhouse...) and the soil
+  temperatures are published as probes, kept out of that average; the extra
+  humidities are not (Gladys averages every humidity of a room).
 - Units: °C, %, hPa, km/h, mm/h, mm per day, UV index, lux, µg/m³; the
   station sends °F, mph, inHg and inches (or bucket tips), converted by the
   integration. These are the units Gladys lists for each kind of sensor.
@@ -93,11 +100,21 @@ One Gladys device per sensor group, so each one can go to its own room:
   others. A failure is tried again at the next interval, never sooner.
 - When WeatherLink or the device answers **429 or a 5xx**, it is left alone
   for the `Retry-After` delay given, else 5 minutes, then 10, 20...; always
-  between 1 minute and 6 hours.
+  between 1 minute and 6 hours (30 minutes at most for a WeatherLink Live or
+  an AirLink, a device of your network). Clearing the key, switching to
+  local and back, or saving the configuration never lifts a pause nor a
+  refusal.
+- A key or a secret holding a line break or a character outside printable
+  ASCII (a bad copy) is refused at once ("not valid") and never sent.
 - When WeatherLink **refuses the key or the secret** (401/403), the reads
   stop and the status says so; one new try every 6 hours (the test button
   may try as soon as the interval has passed), until you change them.
-- A reading older than one hour (or two intervals) is not published.
+- A reading older than one hour (or two intervals) is not published. In the
+  cloud, a transmitter reading is dated by the last packet the console
+  heard from it, when WeatherLink gives it; locally, a transmitter the
+  WeatherLink Live is searching for (lost) publishes nothing.
+- A station shared without API access (403) re-reads the station list once,
+  30 minutes later, then waits for the 6-hour refresh.
 - The instant of the last request, the pauses, the refusals and the stations
   met (id, name, sensors: nothing secret, never the e-mail address or the
   position of the account) survive a reconnection and a restart of the

@@ -32,6 +32,10 @@ export const T = {
     en: 'Both are needed: the API key and the API secret (v2).',
     fr: "Les deux sont nécessaires : la clé d'API et le secret d'API (v2).",
   },
+  keysInvalid: {
+    en: 'API key or secret not valid: it holds a line break or a character WeatherLink does not use. Copy it again from weatherlink.com.',
+    fr: "Clé ou secret d'API non valide : il contient un retour à la ligne ou un caractère que WeatherLink n'utilise pas. Copiez-le à nouveau depuis weatherlink.com.",
+  },
   notConfiguredLocal: {
     en: 'Enter the address (IP) of your WeatherLink Live or AirLink.',
     fr: "Saisissez l'adresse (IP) de votre WeatherLink Live ou AirLink.",

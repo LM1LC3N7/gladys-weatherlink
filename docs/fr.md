@@ -25,6 +25,14 @@ pièce :
 
 - Seul ce que votre station envoie est créé. Un deuxième émetteur reçoit
   « (transmitter n) » dans son nom.
+- **Rangez les appareils « outdoor sensors » et « AirLink » dans une pièce à
+  part (par exemple « Extérieur »)** : Gladys fait la moyenne de la
+  température (et de l'humidité) des capteurs d'une pièce, et la température
+  extérieure rangée dans le salon fausserait la sienne. Les températures
+  supplémentaires d'une Vantage Pro2 (sonde de piscine, de serre…) et les
+  températures du sol sont publiées comme des sondes, hors de cette
+  moyenne ; les humidités supplémentaires non (Gladys moyenne toutes les
+  humidités d'une pièce).
 - Unités : °C, %, hPa, km/h, mm/h, mm par jour, indice UV, lux, µg/m³ ; la
   station envoie des °F, mph, inHg et pouces (ou basculements d'auget),
   convertis par l'intégration. Ce sont les unités que Gladys liste pour
@@ -104,12 +112,24 @@ pièce :
   avant.
 - Quand WeatherLink ou l'appareil répond **429 ou une erreur 5xx**, il est
   laissé tranquille pendant le délai `Retry-After` indiqué, sinon 5 minutes,
-  puis 10, 20… ; toujours entre 1 minute et 6 heures.
+  puis 10, 20… ; toujours entre 1 minute et 6 heures (30 minutes au plus
+  pour une WeatherLink Live ou un AirLink, appareils de votre réseau).
+  Vider la clé, passer en local puis revenir, ou enregistrer la
+  configuration ne lève jamais une pause ni un refus.
+- Une clé ou un secret qui contient un retour à la ligne ou un caractère
+  hors ASCII imprimable (un copier-coller raté) est refusé tout de suite
+  (« non valide ») et jamais envoyé.
 - Quand WeatherLink **refuse la clé ou le secret** (401/403), les lectures
   s'arrêtent et le statut le dit ; un nouvel essai toutes les 6 heures (le
   bouton de test peut réessayer dès que l'intervalle est écoulé), jusqu'à ce
   que vous les changiez.
 - Une mesure de plus d'une heure (ou de deux intervalles) n'est pas publiée.
+  Dans le cloud, la mesure d'un émetteur est datée par le dernier paquet que
+  la console en a reçu, quand WeatherLink le donne ; en local, un émetteur
+  que la WeatherLink Live recherche (perdu) ne publie rien.
+- Une station partagée sans accès à l'API (403) fait relire la liste des
+  stations une fois, 30 minutes plus tard, puis attend le rafraîchissement
+  de 6 heures.
 - L'heure de la dernière requête, les pauses, les refus et les stations
   rencontrées (identifiant, nom, capteurs : rien de secret, jamais l'adresse
   e-mail ni la position du compte) survivent à une reconnexion et à un

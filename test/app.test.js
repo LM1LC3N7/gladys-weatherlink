@@ -311,14 +311,14 @@ test('one station failing (5xx, 403) never stops the others; all failing pauses'
     ctx.gladys.fake.connectionStatus.message.en,
     /Without value: A \(service unavailable/,
   );
-  // A 403 on a station: the list is read again at the next cycle, not sooner.
+  // A 403 on a station: the list is read again once, 30 minutes later.
   ctx.answers.current = (c) =>
     c.url.includes('/current/1?')
       ? json({}, 403)
       : json(current(Math.floor(ctx.clock.now / 1000), { stationId: 2 }));
   await advance(ctx, 5 * 60_000);
   assert.equal(calls(/\/v2\/stations\?/).length, 1);
-  await advance(ctx, 5 * 60_000);
+  await advance(ctx, 30 * 60_000);
   assert.equal(calls(/\/v2\/stations\?/).length, 2);
   // Every station 5xx: the account pauses (5 minutes, then 10, then 20).
   ctx.answers.current = () => json({}, 500);
@@ -344,6 +344,104 @@ test('the station list failing at its refresh never stops the known stations', a
   assert.equal(calls(/\/v2\/stations\?/).length, lists, 'the list is tried again in 30 minutes');
   assert.equal(currents(), reads + 5, 'the stations are still read every 5 minutes');
   assert.equal(ctx.gladys.fake.connectionStatus.connected, true);
+});
+
+test('I1 a 429 pause holds when the key is cleared then typed again', async () => {
+  const ctx = await setup();
+  ctx.answers.current = () => json({}, 429, { 'retry-after': '3600' });
+  await ctx.app.start(CLOUD);
+  assert.equal(currents(), 1);
+  ctx.clock.now += 120_000;
+  await ctx.app.start({ ...CLOUD, api_key: '' });
+  ctx.clock.now += 60_000;
+  ctx.answers.current = () => json(current(Math.floor(ctx.clock.now / 1000)));
+  await ctx.app.start(CLOUD);
+  await advance(ctx, 50 * 60_000);
+  assert.equal(currents(), 1, 'still paused');
+  await advance(ctx, 10 * 60_000);
+  assert.equal(currents(), 2, 'read again at the end of the pause');
+});
+
+test('I1 refused keys are not tried again after a switch to local and back', async () => {
+  const ctx = await setup();
+  ctx.answers.stations = () => json({}, 401);
+  await ctx.app.start(CLOUD);
+  ctx.clock.now += 120_000;
+  await ctx.app.start({ ...CLOUD, source: 'local' });
+  ctx.clock.now += 60_000;
+  await ctx.app.start(CLOUD);
+  await advance(ctx, 60 * 60_000);
+  assert.equal(calls(/\/v2\/stations/).length, 1);
+  assert.match(ctx.gladys.fake.connectionStatus.message.en, /refused the API key or secret/);
+});
+
+test('I1 a removed source is forgotten once its pace has run out, the file stays bounded', () => {
+  const clock = { now: NOW };
+  const storage = memoryStorage();
+  const ctx = { clock };
+  const app = new WeatherLinkApp({
+    gladys: createFakeGladys({ selector: 'weatherlink' }),
+    logger: recordingLogger(),
+    now: () => ctx.clock.now,
+    timers: createFakeTimers(),
+    storage,
+  });
+  const store = app.store;
+  for (let i = 1; i <= 12; i += 1) {
+    store.update(`local:10.0.0.${i}`, { lastAttemptAt: NOW + i });
+  }
+  clock.now += 1_000;
+  store.keep(['local:10.0.0.12']);
+  assert.equal(store.entries.size, 8);
+  assert.ok(store.entries.has('local:10.0.0.12'));
+  clock.now += 2 * 60 * 60_000;
+  store.keep(['local:10.0.0.12']);
+  assert.deepEqual([...store.entries.keys()], ['local:10.0.0.12']);
+});
+
+test('M1 a station refused for ever (403) re-reads the list once, then waits for the 6-hour refresh', async () => {
+  const clock = { now: NOW };
+  const storage = timedStorage(clock);
+  const ctx = await setup({ storage, clock });
+  ctx.answers.stations = () =>
+    json({ stations: [...STATIONS.stations, { station_id: 999, station_name: 'Shared' }] });
+  ctx.answers.current = (c) =>
+    /current\/999/.test(c.url) ? json({}, 403) : json(current(Math.floor(clock.now / 1000)));
+  await ctx.app.start(CLOUD);
+  const writes = storage.times.length;
+  await advance(ctx, 2 * 60 * 60_000);
+  assert.equal(calls(/\/v2\/stations/).length, 2, 'the first list, then one retry after 30 min');
+  // One write per cycle at most (the instant of its request).
+  const cycles = currents() / 2;
+  assert.ok(storage.times.length - writes <= cycles + 2, `${storage.times.length - writes} writes`);
+  await advance(ctx, 5 * 60 * 60_000);
+  assert.equal(calls(/\/v2\/stations/).length, 3, 'the normal 6-hour refresh');
+});
+
+test('M2 a local device answering 5xx is paused 30 minutes at most', async () => {
+  const ctx = await setup({ config: LOCAL });
+  ctx.answers.local = () => json({}, 503);
+  await ctx.app.start(LOCAL);
+  await advance(ctx, 4 * 60 * 60_000);
+  const n = calls(/current_conditions/).length;
+  await advance(ctx, 31 * 60_000);
+  assert.ok(calls(/current_conditions/).length > n, 'tried again within 31 minutes');
+  assert.ok(ctx.app.store.get('local:192.168.1.60').pausedUntil - ctx.clock.now <= 30 * 60_000);
+});
+
+test('M5 a key or a secret with a line break or a non-ASCII character: "not valid", never tried', async () => {
+  const ctx = await setup();
+  for (const bad of [`${API_SECRET}\nx`, `${API_SECRET}é`, `${API_SECRET}\u0000`]) {
+    await ctx.app.start({ ...CLOUD, api_secret: bad });
+    assert.equal(ctx.gladys.fake.connectionStatus.connected, false);
+    assert.match(ctx.gladys.fake.connectionStatus.message.en, /API key or secret not valid/);
+    assert.match(ctx.gladys.fake.connectionStatus.message.fr, /non valide/);
+  }
+  await ctx.app.start({ ...CLOUD, api_key: 'clé' });
+  await advance(ctx, 30 * 60_000);
+  assert.equal(fake.calls.length, 0);
+  const answer = await ctx.app.testConnection();
+  assert.match(answer.en, /not valid/);
 });
 
 test('a value too old is never published as current', async () => {

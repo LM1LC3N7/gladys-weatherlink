@@ -123,6 +123,15 @@ test('cloud: another station answering, or not JSON, is refused', async () => {
   assert.equal((await kindOf(cloudCurrent(KEYS, 167531)))[0], 'invalid');
 });
 
+test('M3 cloud: the instant of the last packet heard dates the values of a transmitter', async () => {
+  const doc = current(1760983200);
+  doc.sensors[2].data[0].last_packet_received_timestamp = 1760979600;
+  fake = installFetch([[/./, () => json(doc)]]);
+  const { records } = await cloudCurrent(KEYS, 167531);
+  assert.equal(records[2].ts, 1760979600 * 1000);
+  assert.equal(records[0].ts, 1760983200 * 1000);
+});
+
 test('a body larger than the limit is abandoned', async () => {
   const big = 'x'.repeat(MAX_BODY + 10);
   fake = installFetch([[/./, () => new Response(big, { status: 200 })]]);

@@ -56,6 +56,14 @@ export const WRITE_GAP = 60_000;
 export const BUSY_MIN = 60_000;
 export const BUSY_BASE = 5 * 60_000;
 export const BUSY_MAX = 6 * 60 * 60_000;
+/** A device of the local network is paused 30 minutes at most. */
+export const LOCAL_BUSY_MAX = 30 * 60_000;
+
+/** The longest interval: the pace of a source removed from the configuration is kept this long. */
+export const MAX_INTERVAL = 60 * 60_000;
+
+/** Sources kept in the state file (the configured ones and recently removed ones). */
+export const MAX_SAVED_SOURCES = 8;
 
 /** Refused keys: no cloud call for 6 hours (or until the keys change). */
 export const REFUSED_BACKOFF = 6 * 60 * 60_000;

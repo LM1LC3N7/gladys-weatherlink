@@ -23,7 +23,7 @@
 import { randomBytes, scryptSync } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { MAX_LOCAL, MAX_STATIONS, WRITE_GAP } from './constants.js';
+import { MAX_INTERVAL, MAX_SAVED_SOURCES, MAX_STATIONS, WRITE_GAP } from './constants.js';
 import { KIND_LABELS, keysOf } from './fields.js';
 
 /** A storage in memory (tests, and the fallback). */
@@ -173,7 +173,7 @@ export class SourceStore {
     this.entries = new Map();
     const sources =
       valid && saved.sources && typeof saved.sources === 'object' ? saved.sources : {};
-    for (const key of Object.keys(sources).slice(0, MAX_LOCAL + 1)) {
+    for (const key of Object.keys(sources).slice(0, MAX_SAVED_SOURCES)) {
       const entry = sources[key];
       if (!SOURCE_KEY.test(key) || !entry || typeof entry !== 'object') {
         continue;
@@ -271,13 +271,38 @@ export class SourceStore {
     return next;
   }
 
-  /** Keep only the configured sources. */
+  /**
+   * The configured sources are `keys`. A source removed from the
+   * configuration loses its stations, but keeps its pace (last request,
+   * pause, refusal and its fingerprint) while any of it still runs: a key
+   * cleared then typed again, or a switch to local and back, never reads
+   * sooner nor lifts a 429 pause or a refusal. Then it is forgotten.
+   */
   keep(keys) {
-    for (const key of [...this.entries.keys()]) {
-      if (!keys.includes(key)) {
+    const now = this.now();
+    for (const [key, entry] of [...this.entries]) {
+      if (keys.includes(key)) {
+        continue;
+      }
+      const running =
+        entry.lastAttemptAt + MAX_INTERVAL > now ||
+        entry.pausedUntil > now ||
+        entry.refusedUntil > now;
+      if (!running) {
         this.entries.delete(key);
         this.markDirty();
+      } else if (entry.stations.length > 0 || entry.stationsReadAt !== 0) {
+        this.entries.set(key, { ...entry, stations: [], stationsReadAt: 0 });
+        this.markDirty();
       }
+    }
+    // Bounded: the oldest removed sources go first.
+    const removed = [...this.entries]
+      .filter(([key]) => !keys.includes(key))
+      .sort((a, b) => a[1].lastAttemptAt - b[1].lastAttemptAt);
+    while (this.entries.size > MAX_SAVED_SOURCES && removed.length > 0) {
+      this.entries.delete(removed.shift()[0]);
+      this.markDirty();
     }
   }
 

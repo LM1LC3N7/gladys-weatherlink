@@ -21,6 +21,10 @@ const number = (value, fallback, min, max) => {
 
 const clean = (value) => (typeof value === 'string' ? value.trim() : '');
 
+/** Only printable ASCII (0x20 to 0x7e). */
+const printable = (text) =>
+  [...text].every((c) => c.charCodeAt(0) >= 0x20 && c.charCodeAt(0) <= 0x7e);
+
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,62})$/;
 
@@ -82,11 +86,16 @@ export function normalizeConfig(raw = {}) {
       addresses.push({ slot: n, address });
     }
   }
+  const apiKey = clean(raw.api_key);
+  // The secret is kept as typed (only the spaces around it are dropped).
+  const apiSecret = clean(raw.api_secret);
   return {
     source,
-    apiKey: clean(raw.api_key),
-    // The secret is kept as typed (only the spaces around it are dropped).
-    apiSecret: clean(raw.api_secret),
+    apiKey,
+    apiSecret,
+    // A key or a secret with a line break or a character outside printable
+    // ASCII cannot travel in a URL or a header: refused at once, never retried.
+    keysInvalid: !printable(apiKey) || !printable(apiSecret),
     addresses: source === 'local' ? addresses : [],
     invalid: source === 'local' ? invalid : [],
     pollMinutes: number(raw.poll_interval, DEFAULT_CONFIG.poll_interval, 1, 60),
@@ -95,4 +104,4 @@ export function normalizeConfig(raw = {}) {
 
 /** Both the key and the secret are needed for the cloud. */
 export const hasCloud = (config) =>
-  config.source === 'cloud' && Boolean(config.apiKey && config.apiSecret);
+  config.source === 'cloud' && Boolean(config.apiKey && config.apiSecret) && !config.keysInvalid;

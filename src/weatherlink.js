@@ -145,7 +145,14 @@ export async function cloudCurrent({ apiKey, apiSecret }, stationId) {
       continue;
     }
     const data = sensor.data[0];
-    const ts = Number.isFinite(data.ts) ? data.ts * 1000 : generated;
+    // The instant the console last heard the transmitter, when given
+    // (structure 23): the values of a lost transmitter age, never stay fresh.
+    const packet = data.last_packet_received_timestamp;
+    const ts = Number.isFinite(packet)
+      ? packet * 1000
+      : Number.isFinite(data.ts)
+        ? data.ts * 1000
+        : generated;
     records.push({ lsid: lsidOf(sensor.lsid), ts, data });
   }
   return { stationId, records };
