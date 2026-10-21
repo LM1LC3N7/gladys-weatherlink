@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-21
+
 ### Added
 
 - Your Davis weather stations in Gladys (Vantage Pro2, Vantage Vue,
@@ -44,4 +46,5 @@ the notes of the version's GitHub Release.
   "Test WeatherLink" button that reads what is due and shows the last values
   and the time of the next possible read.
 
-[Unreleased]: https://github.com/LM1LC3N7/gladys-weatherlink/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-weatherlink/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-weatherlink/releases/tag/v0.1.1
