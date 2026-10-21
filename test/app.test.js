@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { WeatherLinkApp } from '../src/app.js';
 import { TICK } from '../src/constants.js';
-import { memoryStorage } from '../src/store.js';
+import { SourceStore, memoryStorage } from '../src/store.js';
 import {
   API_KEY,
   API_SECRET,
@@ -397,6 +397,46 @@ test('I1 a removed source is forgotten once its pace has run out, the file stays
   clock.now += 2 * 60 * 60_000;
   store.keep(['local:10.0.0.12']);
   assert.deepEqual([...store.entries.keys()], ['local:10.0.0.12']);
+});
+
+test('R1 every configured source keeps its pace after a restart, whatever was removed before', () => {
+  let now = NOW;
+  const timers = { setTimeout: () => 1, clearTimeout: () => {} };
+  const storage = memoryStorage();
+  const options = { storage, now: () => now, timers, maxPause: 6 * 3600e3, maxRefusal: 6 * 3600e3 };
+  const store = new SourceStore(options);
+  let configured = [];
+  for (let i = 0; i < 12; i += 1) {
+    now += 61_000;
+    configured = [`local:192.168.1.${10 + i}`, 'local:192.168.1.200'];
+    store.keep(configured);
+    for (const key of configured) {
+      store.restore(key, '');
+    }
+    for (const key of configured) {
+      store.update(key, { lastAttemptAt: now }, undefined, { defer: true });
+    }
+    store.flush();
+    assert.ok(store.entries.size <= 8, `${store.entries.size} sources in memory`);
+    assert.ok(Object.keys(storage.load().sources).length <= 8);
+  }
+  now += 30_000;
+  const again = new SourceStore(options);
+  for (const key of configured) {
+    assert.ok(again.entries.has(key), key);
+    assert.equal(again.get(key).lastAttemptAt, now - 30_000, key);
+  }
+  // A file holding more than 8 sources, in any order: the most recent are kept.
+  const sources = {};
+  for (let i = 0; i < 12; i += 1) {
+    sources[`local:10.0.0.${i}`] = { lastAttemptAt: NOW + i * 1000 };
+  }
+  sources['bad key'] = { lastAttemptAt: NOW + 99_000 };
+  const loaded = new SourceStore({ ...options, storage: memoryStorage({ sources }) });
+  assert.deepEqual(
+    [...loaded.entries.keys()].sort(),
+    [4, 5, 6, 7, 8, 9, 10, 11].map((i) => `local:10.0.0.${i}`).sort(),
+  );
 });
 
 test('M1 a station refused for ever (403) re-reads the list once, then waits for the 6-hour refresh', async () => {

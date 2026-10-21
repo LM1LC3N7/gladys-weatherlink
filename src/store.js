@@ -173,11 +173,18 @@ export class SourceStore {
     this.entries = new Map();
     const sources =
       valid && saved.sources && typeof saved.sources === 'object' ? saved.sources : {};
-    for (const key of Object.keys(sources).slice(0, MAX_SAVED_SOURCES)) {
+    // Valid entries first, then the most recent ones (whatever their order in
+    // the file): a configured source, read lately, is never the one dropped.
+    const kept = Object.keys(sources)
+      .slice(0, 64)
+      .filter((key) => {
+        const entry = sources[key];
+        return SOURCE_KEY.test(key) && entry && typeof entry === 'object' && !Array.isArray(entry);
+      })
+      .sort((a, b) => finite(sources[b].lastAttemptAt) - finite(sources[a].lastAttemptAt))
+      .slice(0, MAX_SAVED_SOURCES);
+    for (const key of kept) {
       const entry = sources[key];
-      if (!SOURCE_KEY.test(key) || !entry || typeof entry !== 'object') {
-        continue;
-      }
       // A time read back is capped (a request never "in the future", a pause
       // never longer than a fresh one): a clock that jumped, or a hand-edited
       // file, never stops a source for longer.
@@ -296,11 +303,14 @@ export class SourceStore {
         this.markDirty();
       }
     }
-    // Bounded: the oldest removed sources go first.
+    // Bounded: the configured sources always have their room (counted even
+    // before restore() adds them), the removed ones share what is left, the
+    // oldest going first.
+    const room = Math.max(0, MAX_SAVED_SOURCES - new Set(keys).size);
     const removed = [...this.entries]
       .filter(([key]) => !keys.includes(key))
       .sort((a, b) => a[1].lastAttemptAt - b[1].lastAttemptAt);
-    while (this.entries.size > MAX_SAVED_SOURCES && removed.length > 0) {
+    while (removed.length > room) {
       this.entries.delete(removed.shift()[0]);
       this.markDirty();
     }
