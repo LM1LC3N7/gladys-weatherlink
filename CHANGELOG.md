@@ -12,44 +12,30 @@ the notes of the version's GitHub Release.
 
 ### Added
 
-- A working example of scene triggers, scene actions and dashboard widgets
-  (Gladys 5.1.0 or later).
-- `CHANGELOG.md`, rolled by the Release workflow.
-- A GitHub Release for every version, with its changelog section as notes: the
-  Gladys Supervision page links each version to the repository's releases.
-- CI runs the tests on Node 22 and 24, and builds the Docker image.
-- Dependabot keeps the npm dependencies and the GitHub Actions up to date.
-- `SECURITY.md` (how to report a vulnerability) and `CLAUDE.md` (project rules
-  for contributors and coding assistants).
-- Manifest tests: `version` matches `package.json`, `docker_image` is tagged
-  with it, descriptions hold 10 to 100 characters, placeholders are
-  multi-language objects.
-- The latitude and longitude fields show an example value as placeholder.
+- Your Davis weather stations in Gladys (Vantage Pro2, Vantage Vue,
+  WeatherLink Live, WeatherLink Console, AirLink), read only, either through
+  the official WeatherLink API v2 (API key and secret of your account, every
+  station of the account, ten at most) or locally from a WeatherLink Live or
+  an AirLink (up to three addresses).
+- One device per sensor group: outdoor sensors (temperature, humidity, wind
+  speed, average and gust, wind direction, rain rate, rain today and of the
+  last 24 hours, solar radiation, UV index, battery, and the extra sensors of
+  a Vantage Pro2 logger), console (inside temperature and humidity,
+  pressure), AirLink (PM2.5, PM10, air quality index) and soil stations, in
+  the units Gladys lists (°C, km/h, hPa, mm/h, mm per day...).
+- Read every 5 minutes by default, never faster: not by the test button, a
+  reconnection, a saved configuration, the Discovery tab nor a restart (the
+  instant of the last request is kept under `/data`, written at most once
+  per minute); the cloud calls stay under the WeatherLink rate limits.
+- A 429 or 5xx pauses the reads (Retry-After, else 5 minutes doubling,
+  between 1 minute and 6 hours); refused keys stop them, with one new try
+  every 6 hours until they change. Both survive a restart; the key and the
+  secret are never written under `/data` nor in the logs.
+- Local values are published under the serial number of the device that
+  measured them: two devices that swap their addresses never mix their
+  values. One cloud station that fails alone never stops the others.
+- A connection status that names the stations without value and why, and a
+  "Test WeatherLink" button that reads what is due and shows the last values
+  and the time of the next possible read.
 
-### Changed
-
-- Node.js 22 or later is required (Node 20 is end-of-life).
-- Integration SDK 0.15.0. The tests now run against the fake Gladys of the
-  SDK, which refuses the payloads Gladys refuses.
-- The refresh interval is one minute minimum, the fastest Gladys polls a
-  device. The plug's power is only sent when it changes, and every 30
-  minutes otherwise.
-
-### Fixed
-
-- Gladys refused the devices of the Discovery tab: the weather station and
-  the plug declared their poll frequency in seconds instead of one of the
-  values Gladys accepts, and were never polled. They now poll every minute,
-  and the readings follow the refresh interval of the configuration.
-
-- The release commit no longer fails `npm run format:check`: the Release
-  workflow updates the manifest `version` and `docker_image` in place instead
-  of re-printing the whole file with `jq`.
-- The integration can write to `/data`: the image creates the directory owned
-  by the `node` user, a new Docker volume was owned by root.
-- A sub-container running the integration's own image follows it to the new
-  tag at each release, as well as in the manifest of the build summary: it kept
-  the previous tag, which may not exist on the registry. Sub-containers on a
-  third-party image (a broker, a database...) keep theirs.
-
-[Unreleased]: https://github.com/GladysAssistant/integration-template-js/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-weatherlink/commits/main

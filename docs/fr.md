@@ -1,67 +1,155 @@
-# Template de démonstration
+# WeatherLink
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+**Connecteur non officiel, sans lien avec Davis Instruments.** Il amène dans
+Gladys les capteurs de vos stations météo **Davis** (Vantage Pro2, Vantage
+Vue, WeatherLink Live, WeatherLink Console, AirLink), lus soit par l'**API
+officielle WeatherLink v2** (cloud), soit directement sur votre réseau local
+depuis une **WeatherLink Live** ou un **AirLink**.
+
+> **Cette intégration n'a jamais été testée avec une vraie station.** Elle
+> suit les deux intégrations Home Assistant dont elle s'inspire et la
+> documentation officielle des deux API. Merci de signaler ce que vous
+> constatez sur le forum Gladys.
 
 ## Ce que vous obtenez
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+Un appareil Gladys par groupe de capteurs, pour que chacun aille dans sa
+pièce :
+
+| Appareil dans Gladys          | Capteurs                                                                                                                                                                                                                                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Station – outdoor sensors** | température, humidité, vitesse du vent, vitesse moyenne sur 10 min, rafale sur 10 min, direction du vent, intensité de pluie, pluie du jour, pluie des dernières 24 h, rayonnement solaire, indice UV, pile faible ; températures et humidités supplémentaires, températures du sol d'un enregistreur Vantage Pro2 |
+| **Station – console**         | température et humidité intérieures, pression (niveau de la mer et absolue)                                                                                                                                                                                                                                        |
+| **Station – AirLink**         | température, humidité, PM2.5, PM10, indice de qualité de l'air (cloud)                                                                                                                                                                                                                                             |
+| **Station – soil sensors**    | températures du sol 1 à 4, pile faible                                                                                                                                                                                                                                                                             |
+
+- Seul ce que votre station envoie est créé. Un deuxième émetteur reçoit
+  « (transmitter n) » dans son nom.
+- Unités : °C, %, hPa, km/h, mm/h, mm par jour, indice UV, lux, µg/m³ ; la
+  station envoie des °F, mph, inHg et pouces (ou basculements d'auget),
+  convertis par l'intégration. Ce sont les unités que Gladys liste pour
+  chaque type de capteur.
+- Le rayonnement solaire est affiché en lux (W/m² ÷ 0,0079,
+  l'approximation habituelle de la lumière du jour) : Gladys n'a pas d'unité
+  W/m².
+- Pas encore dans Gladys : la pluie de l'épisode, du mois et de l'année
+  (Gladys n'a pas d'unité pour un cumul de pluie), l'humidité du sol
+  (centibars), l'humectation des feuilles, le point de rosée, les indices de
+  chaleur, de refroidissement éolien et THSW, les PM1,
+  l'évapotranspiration. Voir TODO.md.
+- Les noms des appareils et des capteurs sont en anglais ; renommez-les à la
+  création si vous le souhaitez.
+
+## Installation
+
+1. Installez l'intégration depuis le catalogue de Gladys (Gladys 5.1 ou
+   plus récent).
+2. Choisissez comment lire vos stations dans l'écran **Configuration** :
+   - **Cloud WeatherLink (API v2)** : sur weatherlink.com, ouvrez
+     **Account**, cliquez sur **Generate v2 Key**, puis copiez la clé **API
+     Key v2** et le **API Secret** dans la configuration. Toutes les stations
+     du compte sont lues (dix au plus).
+   - **Local** : donnez à votre WeatherLink Live (ou AirLink) une **adresse
+     IP fixe** dans votre box et saisissez-la (jusqu'à trois adresses).
+3. Cliquez sur **Tester WeatherLink** : le message affiche les principales
+   valeurs de chaque station.
+4. Ouvrez l'onglet **Découverte** et ajoutez les appareils. Leurs valeurs
+   arrivent dès leur création.
 
 ## Configuration
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+- **Comment lire les stations** : cloud ou local.
+- **Clé d'API (v2)** et **secret d'API (v2)** (cloud) : le secret est gardé
+  par Gladys dans sa base (en clair, comme tout champ secret de Gladys) et
+  n'est jamais réaffiché dans l'écran de configuration. Il est envoyé
+  seulement à WeatherLink (`api.weatherlink.com`), dans l'en-tête
+  `X-Api-Secret` comme le demande la documentation officielle, jamais dans
+  une URL, un journal, un statut ni sous `/data`. La clé va dans l'adresse
+  des requêtes, comme WeatherLink le veut ; elle n'est jamais écrite dans les
+  journaux non plus.
+- **Intervalle de lecture** : 5 minutes par défaut, de 1 à 60. WeatherLink
+  rafraîchit les données du cloud toutes les 15 minutes avec l'offre
+  gratuite (toutes les 5 ou 1 minute avec Pro et Pro+) : un intervalle plus
+  court ne fait que relire les mêmes valeurs.
+- **Adresses locales** : l'adresse IPv4 (`192.168.1.60`) ou le nom d'hôte,
+  avec un port éventuel. Un chemin, une adresse IPv6 ou des identifiants
+  sont refusés.
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+## À quel rythme WeatherLink est lu
 
-## Actions
-
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
-
-## Scènes
-
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
-
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
-
-## Tableau de bord
-
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+- **Cloud** : la liste des stations du compte (`GET /v2/stations`) au
+  démarrage puis toutes les 6 heures, puis une requête par station à chaque
+  intervalle (`GET /v2/current/{station}`), espacées de 0,2 s. WeatherLink
+  autorise 10 appels par seconde et 1 000 par heure : l'intervalle est
+  allongé si besoin pour qu'une heure ne dépasse jamais 600 appels.
+- **Local** : une requête par adresse à chaque intervalle
+  (`GET /v1/current_conditions`) ; la WeatherLink Live en accepte une toutes
+  les 10 secondes.
+- **Jamais plus vite que l'intervalle**, compté depuis la dernière requête
+  envoyée : ni par le bouton de test, ni par une reconnexion à Gladys, ni par
+  une configuration enregistrée, ni par l'onglet Découverte, ni par un
+  redémarrage du conteneur. Seules de nouvelles clés ou une nouvelle adresse
+  sont lues tout de suite. Avant la fin de l'intervalle, le bouton de test
+  affiche les dernières valeurs et l'heure de la prochaine lecture possible.
+- **Lecture seule** : l'intégration n'écrit jamais rien sur une station ni
+  sur le compte.
+- **Les valeurs appartiennent à l'appareil qui les a mesurées** : chaque
+  réponse locale porte le numéro de série de l'appareil, et les valeurs sont
+  publiées sous ce numéro ; si un autre appareil répond maintenant à
+  l'adresse (deux appareils qui ont échangé leurs adresses dans la box), il
+  devient sa propre station, jamais la première. Chaque réponse du cloud
+  doit nommer la station demandée.
+- Une station qui échoue seule (pas d'accès, erreur du service) n'arrête
+  jamais les autres. Un échec est retenté à l'intervalle suivant, jamais
+  avant.
+- Quand WeatherLink ou l'appareil répond **429 ou une erreur 5xx**, il est
+  laissé tranquille pendant le délai `Retry-After` indiqué, sinon 5 minutes,
+  puis 10, 20… ; toujours entre 1 minute et 6 heures.
+- Quand WeatherLink **refuse la clé ou le secret** (401/403), les lectures
+  s'arrêtent et le statut le dit ; un nouvel essai toutes les 6 heures (le
+  bouton de test peut réessayer dès que l'intervalle est écoulé), jusqu'à ce
+  que vous les changiez.
+- Une mesure de plus d'une heure (ou de deux intervalles) n'est pas publiée.
+- L'heure de la dernière requête, les pauses, les refus et les stations
+  rencontrées (identifiant, nom, capteurs : rien de secret, jamais l'adresse
+  e-mail ni la position du compte) survivent à une reconnexion et à un
+  redémarrage du conteneur : ils sont gardés dans un fichier sous `/data`.
+  L'heure d'une requête est écrite avant que la requête parte, au plus une
+  fois par minute ; une pause, un refus ou une nouvelle station est écrit
+  tout de suite. Seulement tant que les clés sont refusées, le fichier garde
+  une empreinte salée (scrypt) de ces clés refusées, pour qu'après un
+  redémarrage de nouvelles clés soient essayées tout de suite ; elle est
+  effacée par la première lecture réussie : rien dans le fichier ne peut
+  confirmer des clés qui fonctionnent.
+- Au plus 250 valeurs sont envoyées à Gladys par minute.
+- Une réponse de plus de 512 Ko, ou plus lente que 10 secondes, est
+  abandonnée.
 
 ## Dépannage
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+- **« clé ou secret d'API refusé »** : générez à nouveau la clé v2 sur
+  weatherlink.com et copiez la clé et le secret.
+- **« non accessible avec ces clés »** : la station n'est plus dans le
+  compte, ou elle est partagée sans accès à l'API.
+- **« pas de mesure récente »** : la station n'a rien envoyé depuis plus
+  d'une heure (ou son émetteur est hors de portée).
+- **« pas de réponse »** (local) : vérifiez l'adresse (IP fixe) et que la
+  WeatherLink Live est sur le même réseau que Gladys.
+- Journaux : le niveau se règle avec la variable `LOG_LEVEL`.
+
+## Confidentialité
+
+Cloud : l'intégration ne parle qu'à `api.weatherlink.com`, avec votre clé et
+votre secret. Local : elle ne parle qu'aux adresses que vous saisissez, en
+HTTP (la WeatherLink Live n'a pas de HTTPS), et rien ne quitte votre réseau.
+
+## Remerciements
+
+Construite d'après [astrandb/weatherlink](https://github.com/astrandb/weatherlink)
+(MIT, Åke Strandberg) pour l'API v2 et
+[siku2/hass-weatherlink](https://github.com/siku2/hass-weatherlink) (MIT,
+Simon Berger) pour l'API locale, deux intégrations Home Assistant : les
+routes, les noms des champs et les conversions sont portés en JavaScript.
+Leurs notices sont dans `THIRD_PARTY_NOTICES.md`. Davis, Vantage Pro2,
+Vantage Vue, WeatherLink et AirLink sont des marques de leur propriétaire ;
+ce connecteur est gratuit et non officiel.
