@@ -10,6 +10,14 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- A refusal of the keys or a 429 pause is no longer forgotten after trying
+  several local addresses in a row: the state file under `/data` keeps the
+  configured sources first, then those holding a pause or a refusal, and
+  only then the other recently removed ones. Back to the cloud with the
+  same refused keys, nothing is sent before the end of the refusal.
+
 ## [0.1.1] - 2026-10-21
 
 ### Added

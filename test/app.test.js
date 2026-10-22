@@ -439,6 +439,56 @@ test('R1 every configured source keeps its pace after a restart, whatever was re
   );
 });
 
+test('M6 a refusal outlives 8 local addresses tried meanwhile; back to the cloud: no call', async () => {
+  const clock = { now: NOW };
+  const storage = memoryStorage();
+  const ctx = await setup({ storage, clock });
+  ctx.answers.stations = () => json({}, 401);
+  ctx.answers.local = () => json(live());
+  await ctx.app.start(CLOUD);
+  assert.equal(calls(/\/v2\/stations/).length, 1);
+  for (let i = 0; i < 8; i += 1) {
+    clock.now += 61_000;
+    await ctx.app.start({ ...LOCAL, local_1_address: `192.168.1.${100 + i}` });
+  }
+  assert.equal(calls(/current_conditions/).length, 8);
+  assert.ok(ctx.app.store.entries.has('cloud'), 'the refusal is kept last');
+  clock.now += 61_000;
+  await ctx.app.start(CLOUD);
+  await advance(ctx, 60 * 60_000);
+  assert.equal(calls(/\/v2\/stations/).length, 1, 'no call with the refused keys');
+  // The same after a restart of the container.
+  ctx.app.shutdown();
+  fake.restore();
+  const again = await setup({ storage, clock });
+  again.answers.stations = () => json({}, 401);
+  await again.app.start(CLOUD);
+  assert.equal(fake.calls.length, 0);
+});
+
+test('M6 at load, the configured sources first, then a pause or a refusal, then the most recent', () => {
+  const options = {
+    now: () => NOW,
+    timers: { setTimeout: () => 1, clearTimeout: () => {} },
+    maxPause: 6 * 3600e3,
+    maxRefusal: 6 * 3600e3,
+  };
+  const sources = { cloud: { lastAttemptAt: NOW - 50 * 60_000, refusedUntil: NOW + 3600e3 } };
+  for (let i = 0; i < 10; i += 1) {
+    sources[`local:10.0.0.${i}`] = { lastAttemptAt: NOW - i * 1000 };
+  }
+  sources['local:10.0.0.42'] = { lastAttemptAt: NOW - 59 * 60_000 };
+  const store = new SourceStore({
+    ...options,
+    storage: memoryStorage({ configured: ['local:10.0.0.42'], sources }),
+  });
+  const keys = [...store.entries.keys()];
+  assert.equal(keys.length, 8);
+  assert.ok(keys.includes('local:10.0.0.42'), 'configured');
+  assert.ok(keys.includes('cloud'), 'refused');
+  assert.ok(!keys.includes('local:10.0.0.9'));
+});
+
 test('M1 a station refused for ever (403) re-reads the list once, then waits for the 6-hour refresh', async () => {
   const clock = { now: NOW };
   const storage = timedStorage(clock);

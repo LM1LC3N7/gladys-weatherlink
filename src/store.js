@@ -89,6 +89,18 @@ export function fileStorage(path, { logger } = {}) {
 
 const finite = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
+/** A source that still holds a pause or a refusal. */
+const holds = (entry, now) => finite(entry?.pausedUntil) > now || finite(entry?.refusedUntil) > now;
+
+const compareRanks = (a, b) => {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) {
+      return a[i] - b[i];
+    }
+  }
+  return 0;
+};
+
 const cleanText = (value, max) =>
   typeof value === 'string'
     ? [...value]
@@ -173,15 +185,26 @@ export class SourceStore {
     this.entries = new Map();
     const sources =
       valid && saved.sources && typeof saved.sources === 'object' ? saved.sources : {};
-    // Valid entries first, then the most recent ones (whatever their order in
-    // the file): a configured source, read lately, is never the one dropped.
+    // The sources configured when the file was written (only keys, nothing
+    // secret), to keep them first.
+    this.configured = Array.isArray(saved?.configured)
+      ? saved.configured.filter((k) => typeof k === 'string' && SOURCE_KEY.test(k)).slice(0, 8)
+      : [];
+    // Valid entries only, whatever their order in the file: the configured
+    // sources first, then those holding a pause or a refusal, then the most
+    // recent ones.
+    const rank = (key) => [
+      this.configured.includes(key) ? 0 : 1,
+      holds(sources[key], at) ? 0 : 1,
+      -finite(sources[key].lastAttemptAt),
+    ];
     const kept = Object.keys(sources)
       .slice(0, 64)
       .filter((key) => {
         const entry = sources[key];
         return SOURCE_KEY.test(key) && entry && typeof entry === 'object' && !Array.isArray(entry);
       })
-      .sort((a, b) => finite(sources[b].lastAttemptAt) - finite(sources[a].lastAttemptAt))
+      .sort((a, b) => compareRanks(rank(a), rank(b)))
       .slice(0, MAX_SAVED_SOURCES);
     for (const key of kept) {
       const entry = sources[key];
@@ -304,12 +327,22 @@ export class SourceStore {
       }
     }
     // Bounded: the configured sources always have their room (counted even
-    // before restore() adds them), the removed ones share what is left, the
-    // oldest going first.
+    // before restore() adds them), the removed ones share what is left. Those
+    // whose last request only still runs go first, the oldest first; those
+    // holding a pause or a refusal go last.
+    if (JSON.stringify(this.configured) !== JSON.stringify(keys)) {
+      this.configured = [...keys];
+      this.markDirty();
+    }
     const room = Math.max(0, MAX_SAVED_SOURCES - new Set(keys).size);
     const removed = [...this.entries]
       .filter(([key]) => !keys.includes(key))
-      .sort((a, b) => a[1].lastAttemptAt - b[1].lastAttemptAt);
+      .sort((a, b) =>
+        compareRanks(
+          [holds(a[1], now) ? 1 : 0, a[1].lastAttemptAt],
+          [holds(b[1], now) ? 1 : 0, b[1].lastAttemptAt],
+        ),
+      );
     while (removed.length > room) {
       this.entries.delete(removed.shift()[0]);
       this.markDirty();
@@ -362,6 +395,7 @@ export class SourceStore {
     this.storage.save({
       salt: this.salt,
       writtenAt: this.writtenAt,
+      configured: this.configured,
       sources: Object.fromEntries(this.entries),
     });
   }
