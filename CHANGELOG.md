@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-22
+
 ### Fixed
 
 - A refusal of the keys or a 429 pause is no longer forgotten after trying
@@ -54,5 +56,6 @@ the notes of the version's GitHub Release.
   "Test WeatherLink" button that reads what is due and shows the last values
   and the time of the next possible read.
 
-[Unreleased]: https://github.com/LM1LC3N7/gladys-weatherlink/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/LM1LC3N7/gladys-weatherlink/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/LM1LC3N7/gladys-weatherlink/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/LM1LC3N7/gladys-weatherlink/releases/tag/v0.1.1
