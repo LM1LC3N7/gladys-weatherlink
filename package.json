@@ -1,6 +1,6 @@
 {
   "name": "gladys-weatherlink",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "WeatherLink for Gladys Assistant: your Davis weather stations (Vantage Pro2, Vantage Vue, WeatherLink Live, AirLink) read through the official WeatherLink API v2 or the local API of the WeatherLink Live, read only.",
   "type": "module",
